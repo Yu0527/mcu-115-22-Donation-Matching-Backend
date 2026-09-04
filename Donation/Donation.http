@@ -1,0 +1,6 @@
+@Donation_HostAddress = http://localhost:5015
+
+GET {{Donation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
