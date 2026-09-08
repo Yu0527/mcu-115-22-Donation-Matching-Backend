@@ -14,7 +14,8 @@ namespace Donation.Services
         {
             _httpClient = httpClient;
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
-            _model = " gemma4:e2b"; // 要跟 ollama pull 的模型名稱一致
+            _model = "gemma4:e2b"; // 要跟 ollama pull 的模型名稱一致
+
         }
 
         public async Task<string> SendMessageAsync(string userMessage, string? role = null)
@@ -61,7 +62,7 @@ namespace Donation.Services
 
 規則：
 - 一律使用臺灣常用的繁體中文，禁止簡體中文。
-- 僅回答平台帳號、物資捐助、物資需求、受助者與操作流程相關問題。
+- 僅回答操作流程、平台帳號、物資捐助、物資需求、受助者相關問題。
 - 資料不足或無法確認時，明確說明無法確認，並引導使用者查看「常見問題」或聯絡管理員。
 - 不得編造受助者名稱、地址、電話、聯絡方式、物資需求或平台功能。
 - 平台僅接受物資捐助，不接受金錢捐款。
@@ -88,7 +89,7 @@ namespace Donation.Services
                 system = systemPrompt,
                 stream = false,
                 think = false,
-                keep_alive = "15m",
+                keep_alive = "1h",
                 options = new
                 {
                     temperature = 0.2,
@@ -147,7 +148,7 @@ namespace Donation.Services
         "收據", "感謝狀", "歷史紀錄",
         "寄送", "面交", "物流",
         "災害", "日常捐助",
-        "搜尋物資需求", "平台"
+        "搜尋物資需求", "平台","流程"
     };
 
             return keywords.Any(keyword =>
