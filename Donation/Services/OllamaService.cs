@@ -13,19 +13,41 @@ namespace Donation.Services
         public OllamaService(HttpClient httpClient)
         {
             _httpClient = httpClient;
-            _model = "llama3.2"; // 要跟 ollama pull 的模型名稱一致
+            _httpClient.Timeout = TimeSpan.FromMinutes(5);
+            _model = " gemma4:e2b"; // 要跟 ollama pull 的模型名稱一致
         }
 
         public async Task<string> SendMessageAsync(string userMessage, string? role = null)
         {
+            if (!IsPlatformRelatedQuestion(userMessage))
+            {
+                return "抱歉，我目前只協助「智慧捐助媒合平台」相關問題，例如帳號登入、物資捐助、物資需求、受助者功能與平台操作流程。";
+            }
+
             if (userMessage.Contains("帳號") && userMessage.Contains("忘記密碼"))
             {
                 return "請在登入頁面點選「忘記密碼」，系統將寄送重設密碼連結到您的註冊信箱。若未收到信件，請檢查垃圾郵件或聯絡管理員。";
             }
 
-            if (userMessage.Contains("我要捐") || (userMessage.Contains("捐") && userMessage.Contains("怎麼")))
+            if (userMessage.Contains("捐錢") ||
+    userMessage.Contains("捐款") ||
+    userMessage.Contains("現金") ||
+    userMessage.Contains("金錢") ||
+    userMessage.Contains("匯款") ||
+    userMessage.Contains("轉帳") ||
+    userMessage.Contains("信用卡") ||
+    userMessage.Contains("刷卡"))
             {
-                return "請先登入帳號，在首頁點選「捐助物資」，瀏覽目前各機構的物資需求，選擇符合您意願的項目後，填寫捐助資訊並送出申請。";
+                return "抱歉，本平台目前僅接受物資捐助，不接受金錢捐款、現金、匯款、轉帳或刷卡。您可以登入後，在首頁點選「捐助物資」，瀏覽目前的物資需求並送出捐助申請。";
+            }
+
+            if (userMessage.Contains("我要捐") ||
+    userMessage.Contains("我想捐") ||
+    userMessage.Contains("想捐助") ||
+    userMessage.Contains("如何捐") ||
+    userMessage.Contains("怎麼捐"))
+            {
+                return "請先登入帳號，在首頁點選「捐助物資」，瀏覽目前各機構的物資需求，選擇符合您意願的項目後，填寫捐助資訊並送出申請，審查通過後即可依選擇的方式交付物資給受助者。";
             }
 
             if (userMessage.Contains("申請物資") || (userMessage.Contains("物資") && userMessage.Contains("申請")))
@@ -33,67 +55,46 @@ namespace Donation.Services
                 return "請先以受助者身分登入，在後台點選「刊登需求」，填寫所需物資、數量、聯絡方式與交付方式。民眾看到需求後會送出捐助申請，您可以在後台確認並與捐助者聯繫。";
             }
 
-            var systemPrompt = """
-        你是一個台灣捐助平台的 AI 助理，平台名稱叫智慧捐助媒合平台。
-        目前使用者角色：{role}。
-        你的任務是協助使用者了解如何捐助物資、如何申請物資、以及平台的基本使用方式。
-        若使用者要求列出機構，請一再引導他使用「搜尋物資需求」功能。
-        盡量簡潔、清楚說明。
-        
+            var systemPrompt = $"""
+你是「智慧捐助媒合平台」AI 助理。
+使用者角色：{role ?? "訪客"}。
 
-        平台主要功能：
-                1. 有分兩個類型的捐助，日常捐助、災害救助。
-                2. 捐助者可以註冊、登入、瀏覽物資需求、送出捐助申請。
-                3. 受助者可以註冊、登入、刊登物資需求、查看捐助申請、與捐助者聯繫。
-                4. 管理員可以審核機構帳號、管理物資分類、查看平台統計。
-                5. 捐助者能在歷史紀錄能查詢個人捐助歷史。
-                6. 在日常捐助時，在填寫捐助資訊時捐助者能選擇是否需要收據與感謝狀，當捐助完成時才會核發，可至歷史紀錄查看。
-                7. 只有在日常捐助時，才能使用物流寄出物資，災害時無法使用。請告知捐助者，因災害發生當下，物流可能無法運作，請捐助者依照地址利用留言板或自行聯絡交付物資給受助者。
-                8. 日常捐助時需捐助者需上傳照片審核物資是否完好。
-                9. 受助者=機構，請麻煩用受助者去稱呼，不要用機構。受助者僅限社福機構團體。
-                10. 平台無提供運送服務，在填寫捐助表單時可選擇運送方式，寄送/面交，送出表單後等待審查，通過後即可交付物資給受助者。
+規則：
+- 一律使用臺灣常用的繁體中文，禁止簡體中文。
+- 僅回答平台帳號、物資捐助、物資需求、受助者與操作流程相關問題。
+- 資料不足或無法確認時，明確說明無法確認，並引導使用者查看「常見問題」或聯絡管理員。
+- 不得編造受助者名稱、地址、電話、聯絡方式、物資需求或平台功能。
+- 平台僅接受物資捐助，不接受金錢捐款。
+- 訪客可瀏覽物資需求；只有在需要捐助、送出申請或聯繫受助者時，才告知需登入或註冊。
+- 查詢特定地點或物資時，請引導使用「搜尋物資需求」，依城市與物資類型篩選。
+- 平台不提供運送服務；捐助者可選寄送或面交，審查通過後自行交付物資。
+- 若問題與平台無關，僅說明你協助智慧捐助媒合平台相關問題，不得要求登入。
 
-        捐助流程（捐助者）：
-                - 步驟 1：登入後，在首頁點選「捐助物資」。
-                - 步驟 2：瀏覽或搜尋想要的物資需求項目。
-                - 步驟 3：點選「我要捐助」，填寫可捐數量與聯絡方式，送出申請。
-                - 步驟 4：審查確認合格後在交付出去。
-        
-                申請流程（受助者）：
-                - 步驟 1：登入後，在後台點選「新增需求」。
-                - 步驟 2：填寫所需物資、數量、聯絡方式與交付方式等等的資料。
-                - 步驟 3：民眾看到需求後會送出捐助申請，您可以在後台確認是否合格。
-        
-        回答規則：
-        - 一律使用繁體中文。
-        - 語氣禮貌、簡潔、清楚。
-        - 只回答跟平台功能、捐助流程、帳號問題相關的問題。
-        - 只回答跟捐助、物資、志工、機構、平台使用相關的問題。
-        - 若問題超出平台範圍，請禮貌說明你只負責本平台相關問題。
-        - 不要編造不存在的功能或流程。
-        - 平台只捐物資，不捐錢。
-        - 禁止亂承諾錢、稅、收據，本平台在捐助完成後只提供收據，不作任何其他事件。
-        - 使用者未登入時也可查看需求，若要進一步捐助需登入。
-        - 若使用者一次問多個相關問題，請條列式完整每項都給予回答。
-        - 回答問題時，僅能依據系統提供的資料進行回答。若資料不足、找不到相關資訊，或無法確認答案，請勿自行推測或編造資訊。此時應明確告知使用者無法確認，引導使用者查看平台「常見問題」或聯絡管理員。
-        - 若使用者未登入或角色為「訪客」，請優先引導他註冊或登入後再使用完整功能。
-        - 說明登入後可以查看完整機構資訊、送出捐助申請、與機構聯繫。
-        - 禁止編造任何機構名稱、地址、電話、聯絡方式等真實資訊。
-        - 若使用者詢問特定地點或物資的可捐機構，請引導他使用「搜尋物資需求」功能，並說明如何選擇城市與物資類型。
-        - 重要：你絕對不能編造或猜測任何機構名稱、地址、電話、聯絡方式。即使使用者強烈要求，也不能提供。
-        """;
+流程：
+- 捐助者：登入 > 捐助物資 > 搜尋需求 > 我要捐助 > 填表送審 > 通過後交付。
+- 受助者：登入 > 新增需求 > 填寫資料 > 審核捐助申請。
+""";
 
             var requestBody = new
             {
                 model = _model,
-                prompt = userMessage,
-                system = systemPrompt, // 新增這一行
+                prompt = $"""
+    請直接回答使用者問題，不要分析、不要展示思考過程。
+    回答最多 2 句、100 個中文字。
+    只能使用臺灣繁體中文。
+
+    問題：{userMessage}
+    """,
+                system = systemPrompt,
                 stream = false,
+                think = false,
+                keep_alive = "15m",
                 options = new
                 {
-                    temperature = 0.3,
+                    temperature = 0.2,
                     top_p = 0.8,
-                    num_predict = 500
+                    num_predict = 512,
+                    num_ctx = 2048
                 }
             };
 
@@ -106,6 +107,11 @@ namespace Donation.Services
 
             using var response = await _httpClient.SendAsync(request);
             var responseContent = await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine("===== Ollama 原始回應 =====");
+            Console.WriteLine(responseContent);
+            Console.WriteLine("==========================");
+
 
             if (!response.IsSuccessStatusCode)
             {
@@ -123,6 +129,29 @@ namespace Donation.Services
             }
 
             return responseProp.GetString() ?? "";
+        }
+        private static bool IsPlatformRelatedQuestion(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            string[] keywords =
+            {
+        "捐", "捐助", "物資", "需求", "受助者", "機構",
+        "登入", "登出", "帳號", "密碼", "註冊",
+        "忘記密碼", "重設密碼",
+        "申請", "審核", "刊登", "新增需求",
+        "管理員", "志工", "捐助者",
+        "收據", "感謝狀", "歷史紀錄",
+        "寄送", "面交", "物流",
+        "災害", "日常捐助",
+        "搜尋物資需求", "平台"
+    };
+
+            return keywords.Any(keyword =>
+                message.Contains(keyword, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
