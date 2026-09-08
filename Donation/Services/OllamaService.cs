@@ -10,11 +10,13 @@ namespace Donation.Services
         private readonly HttpClient _httpClient;
         private readonly string _model;
 
+
         public OllamaService(HttpClient httpClient)
         {
             _httpClient = httpClient;
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
-            _model = " gemma4:e2b"; // 要跟 ollama pull 的模型名稱一致
+            _model = "gemma4:e2b"; // 要跟 ollama pull 的模型名稱一致
+
         }
 
         public async Task<string> SendMessageAsync(string userMessage, string? role = null)
@@ -88,7 +90,7 @@ namespace Donation.Services
                 system = systemPrompt,
                 stream = false,
                 think = false,
-                keep_alive = "15m",
+                keep_alive = "1h",
                 options = new
                 {
                     temperature = 0.2,
@@ -147,7 +149,7 @@ namespace Donation.Services
         "收據", "感謝狀", "歷史紀錄",
         "寄送", "面交", "物流",
         "災害", "日常捐助",
-        "搜尋物資需求", "平台"
+        "搜尋物資需求", "平台","流程"
     };
 
             return keywords.Any(keyword =>
