@@ -30,6 +30,22 @@ namespace Donation.Controllers
 
             Console.WriteLine($"收到前端訊息：{request.Message}");
             Console.WriteLine($"收到前端角色：{request.Role}");
+            Console.WriteLine("===== 前端傳入 History =====");
+
+            var history = request.History ?? new List<ChatHistoryItem>();
+
+            Console.WriteLine($"History 數量：{history.Count}");
+
+            for (var i = 0; i < history.Count; i++)
+            {
+                var item = history[i];
+
+                Console.WriteLine(
+                    $"History[{i}] Sender：{item.Sender}，Content：{item.Content}"
+                );
+            }
+
+            Console.WriteLine("============================");
 
             var role = string.IsNullOrWhiteSpace(request.Role)
                 ? "訪客"
@@ -40,10 +56,7 @@ namespace Donation.Controllers
 
             try
             {
-                var answer = await _ollamaService.SendMessageAsync(
-                    request.Message.Trim(),
-                    role
-                );
+                var answer = await _ollamaService.SendMessageAsync(request.Message.Trim(),role,history);
 
                 Console.WriteLine($"Ollama 回覆內容：{answer}");
 
@@ -67,7 +80,15 @@ namespace Donation.Controllers
         public class ChatRequest
         {
             public string Message { get; set; }
-            public string? Role { get; set; }
+            public string Role { get; set; }
+
+            public List<ChatHistoryItem> History { get; set; } = new();
+        }
+
+        public class ChatHistoryItem
+        {
+            public string Sender { get; set; } = "";
+            public string Content { get; set; } = "";
         }
     }
 }
