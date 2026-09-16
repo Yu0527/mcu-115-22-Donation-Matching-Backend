@@ -2,6 +2,7 @@ using Donation.Services;
 using Npgsql;
 using System.Diagnostics;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -28,8 +29,8 @@ builder.Services.AddSingleton<NpgsqlDataSource>(
     NpgsqlDataSource.Create(connectionString)
 );
 
-builder.Services.AddScoped<IOllamaService, OllamaService>();
-builder.Services.AddHttpClient<OllamaService>();
+
+builder.Services.AddHttpClient<IOpenRouterService, OpenRouterService>();
 
 
 var app = builder.Build();

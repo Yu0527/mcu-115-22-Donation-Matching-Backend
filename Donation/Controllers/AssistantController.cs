@@ -7,58 +7,36 @@ namespace Donation.Controllers
     [Route("api/[controller]")]
     public class AssistantController : ControllerBase
     {
-        private readonly IOllamaService _ollamaService;
+        private readonly IOpenRouterService _openRouterService;
 
-        public AssistantController(IOllamaService ollamaService)
+        public AssistantController(IOpenRouterService openRouterService)
         {
-            _ollamaService = ollamaService;
+            _openRouterService = openRouterService;
         }
 
         [HttpPost("chat")]
         public async Task<IActionResult> Chat([FromBody] ChatRequest request)
         {
-
             if (request == null || string.IsNullOrWhiteSpace(request.Message))
             {
                 Console.WriteLine("沒有收到 message，或 message 是空白。");
-
-                return BadRequest(new
-                {
-                    message = "message 不能為空白"
-                });
+                return BadRequest(new { message = "message 不能為空白" });
             }
 
             Console.WriteLine($"收到前端訊息：{request.Message}");
             Console.WriteLine($"收到前端角色：{request.Role}");
-            Console.WriteLine("===== 前端傳入 History =====");
-
+            
             var history = request.History ?? new List<ChatHistoryItem>();
-
-            Console.WriteLine($"History 數量：{history.Count}");
-
-            for (var i = 0; i < history.Count; i++)
-            {
-                var item = history[i];
-
-                Console.WriteLine(
-                    $"History[{i}] Sender：{item.Sender}，Content：{item.Content}"
-                );
-            }
-
-            Console.WriteLine("============================");
-
-            var role = string.IsNullOrWhiteSpace(request.Role)
-                ? "訪客"
-                : request.Role.Trim();
+            var role = string.IsNullOrWhiteSpace(request.Role) ? "訪客" : request.Role.Trim();
 
             Console.WriteLine($"處理後角色：{role}");
-            Console.WriteLine("準備呼叫 Ollama...");
+            Console.WriteLine("準備呼叫 OpenRouter 雲端 AI...");
 
             try
             {
-                var answer = await _ollamaService.SendMessageAsync(request.Message.Trim(),role,history);
+                var answer = await _openRouterService.SendMessageAsync(request.Message.Trim(), role, history);
 
-                Console.WriteLine($"Ollama 回覆內容：{answer}");
+                Console.WriteLine($"OpenRouter 回覆內容：{answer}");
 
                 return Ok(new
                 {
@@ -67,7 +45,7 @@ namespace Donation.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Ollama 呼叫失敗：");
+                Console.WriteLine("OpenRouter 呼叫失敗：");
                 Console.WriteLine(ex.ToString());
 
                 return StatusCode(500, new
@@ -77,11 +55,11 @@ namespace Donation.Controllers
                 });
             }
         }
+
         public class ChatRequest
         {
             public string Message { get; set; }
             public string Role { get; set; }
-
             public List<ChatHistoryItem> History { get; set; } = new();
         }
 
