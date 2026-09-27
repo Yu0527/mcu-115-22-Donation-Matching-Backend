@@ -16,7 +16,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
+        policy.WithOrigins(
+                "http://localhost:4200", 
+                "https://localhost:4200",
+                "https://ruby-chiou.github.io" // <-- 補上這一行你的前端正式網域
+              )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
