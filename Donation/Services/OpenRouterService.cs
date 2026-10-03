@@ -22,8 +22,8 @@ namespace Donation.Services
             _httpClient.Timeout = TimeSpan.FromMinutes(5);
             _apiKey = configuration["OpenRouter:ApiKey"] ?? throw new InvalidOperationException("找不到 OpenRouter API Key 設定。");
             
-            // 這裡換成我們剛剛選好的免費模型
-            _model = "inclusionai/ling-3.0-flash-vl:free"; 
+            // 這裡換成免費模型
+            _model = "openrouter/free"; 
         }
 
         public async Task<string> SendMessageAsync(string userMessage, string? role = null, List<AssistantController.ChatHistoryItem>? history = null)
