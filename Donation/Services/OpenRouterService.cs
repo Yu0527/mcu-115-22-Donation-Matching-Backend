@@ -109,13 +109,15 @@ var systemPrompt = $"""
         """
     });
 
-    var requestBody = new
-    {
-        model = _model,
-        messages = messages
-    };
+            var requestBody = new
+            {
+                model = _model,
+                messages = messages,
+                max_tokens = 512,
+                temperature = 0.2
+            };
 
-    var json = JsonSerializer.Serialize(requestBody);
+            var json = JsonSerializer.Serialize(requestBody);
 
     // --- 3. 加入 Try-Catch 例外處理防護網 ---
     try
