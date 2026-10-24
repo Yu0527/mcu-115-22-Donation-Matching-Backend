@@ -76,5 +76,15 @@ public sealed class AiDonationReviewController : ControllerBase
                 }
             );
         }
+        catch (InvalidOperationException error)
+        {
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new
+                {
+                    message = error.Message
+                }
+            );
+        }
     }
 }

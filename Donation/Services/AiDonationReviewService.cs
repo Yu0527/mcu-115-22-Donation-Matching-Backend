@@ -83,6 +83,34 @@ namespace Donation.Services
                 supabaseClient, supabaseUrl, serviceRoleKey, donationId,
                 cancellationToken);
 
+            if (imageFiles.Count == 0)
+            {
+                const string noImageReason = "沒有上傳物資照片，不能判定通過。";
+
+                await _donationRepository.UpdateAiReviewResultAsync(
+                    donationId,
+                    "pending_human_review",
+                    "rejected",
+                    "無法判斷",
+                    noImageReason,
+                    DateTimeOffset.UtcNow,
+                    cancellationToken);
+
+                return new AiDonationReviewResponse
+                {
+                    DonationId = donationId,
+                    RequiredItem = requiredItem,
+                    Status = "pending_human_review",
+                    AiDecision = "rejected",
+                    DecisionText = "沒有物資照片，等待受助者最後確認",
+                    ItemMatches = false,
+                    DetectedCondition = "無法判斷",
+                    Reason = noImageReason,
+                    ConditionMatches = false,
+                    ImageCount = 0
+                };
+            }
+
             List<OpenRouterImageInput> downloadedImages = new();
 
             foreach (DonationImageFile imageFile in imageFiles)
@@ -175,7 +203,10 @@ namespace Donation.Services
             CancellationToken cancellationToken)
         {
             string apiKey = GetRequiredSetting("OpenRouter:ApiKey");
-            string model = GetRequiredSetting("OpenRouter:Model");
+            string? configuredModel = _configuration["OpenRouter:Model"];
+            string model = string.IsNullOrWhiteSpace(configuredModel)
+                ? "google/gemini-2.5-flash"
+                : configuredModel;
             string modelCondition = expectedCondition == "全新" ? "new" : "used";
 
             List<object> content = new()
