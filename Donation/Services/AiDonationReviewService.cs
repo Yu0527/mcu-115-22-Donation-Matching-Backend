@@ -205,9 +205,9 @@ namespace Donation.Services
             string? configuredModel = _configuration["OpenRouter:Model"];
             string modelCondition = expectedCondition == "全新" ? "new" : "used";
             List<string> models = new();
-            if (!string.IsNullOrWhiteSpace(configuredModel) &&
-                !configuredModel.Contains("gemini-2.5-flash", StringComparison.OrdinalIgnoreCase))
-                models.Add(configuredModel);
+            if (!string.IsNullOrWhiteSpace(configuredModel))
+                models.Add(configuredModel.Trim());
+            models.Add("google/gemini-2.5-flash");
             models.Add("nvidia/nemotron-3.5-super-vl:free");
             models.Add("google/gemma-4-26b-a4b-it:free");
 
