@@ -85,7 +85,7 @@ namespace Donation.Services
 
             if (imageFiles.Count == 0)
             {
-                const string noImageReason = "沒有上傳物資照片，不能判定通過。";
+                const string noImageReason = "這次沒有看到物資照片，機構會再確認。";
 
                 await _donationRepository.UpdateAiReviewResultAsync(
                     donationId,
@@ -102,7 +102,7 @@ namespace Donation.Services
                     RequiredItem = requiredItem,
                     Status = "pending_human_review",
                     AiDecision = "rejected",
-                    DecisionText = "沒有物資照片，等待受助者最後確認",
+                    DecisionText = "這次沒有看到物資照片，機構會再確認。",
                     ItemMatches = false,
                     DetectedCondition = "無法判斷",
                     Reason = noImageReason,
@@ -148,22 +148,22 @@ namespace Donation.Services
             if (!aiResult.ItemMatches)
             {
                 aiDecision = "rejected";
-                decisionText = "圖片中的物品不是需求的「" + requiredItem + "」，等待受助者最後確認";
+                decisionText = "照片裡看起來不是「" + requiredItem + "」。機構會再看一次照片。";
             }
             else if (aiResult.Condition == "無法判斷")
             {
                 aiDecision = "rejected";
-                decisionText = "AI 暫時無法確認物資狀態，等待受助者最後確認";
+                decisionText = "這張照片沒有辨識完成，機構會直接看照片確認。";
             }
             else if (conditionMatches)
             {
                 aiDecision = "accepted";
-                decisionText = "物品種類與狀態符合接受條件，等待受助者最後確認";
+                decisionText = "照片和這項物資看起來相符，接下來由機構確認。";
             }
             else
             {
                 aiDecision = "rejected";
-                decisionText = "AI 初步判定為" + aiResult.Condition + "，不符合接受條件，等待受助者最後確認";
+                decisionText = "照片裡的物資狀態和機構要求不一樣，機構會再看一次。";
             }
 
             _logger.LogInformation(
@@ -175,12 +175,11 @@ namespace Donation.Services
                 "pending_human_review",
                 aiDecision,
                 aiResult.Condition,
-                aiResult.Reason,
+                decisionText,
                 DateTimeOffset.UtcNow,
                 cancellationToken
             );
 
-            // 直接使用模型提供的 reason
             return new AiDonationReviewResponse
             {
                 DonationId = donationId,
@@ -190,7 +189,7 @@ namespace Donation.Services
                 DecisionText = decisionText,
                 ItemMatches = aiResult.ItemMatches,
                 DetectedCondition = aiResult.Condition,
-                Reason = aiResult.Reason,
+                Reason = decisionText,
                 ConditionMatches = conditionMatches,
                 ImageCount = downloadedImages.Count
             };
@@ -204,10 +203,13 @@ namespace Donation.Services
         {
             string apiKey = GetRequiredSetting("OpenRouter:ApiKey");
             string? configuredModel = _configuration["OpenRouter:Model"];
-            string model = string.IsNullOrWhiteSpace(configuredModel)
-                ? "google/gemini-2.5-flash"
-                : configuredModel;
             string modelCondition = expectedCondition == "全新" ? "new" : "used";
+            List<string> models = new();
+            if (!string.IsNullOrWhiteSpace(configuredModel) &&
+                !configuredModel.Contains("gemini-2.5-flash", StringComparison.OrdinalIgnoreCase))
+                models.Add(configuredModel);
+            models.Add("nvidia/nemotron-3.5-super-vl:free");
+            models.Add("google/gemma-4-26b-a4b-it:free");
 
             List<object> content = new()
             {
@@ -239,20 +241,18 @@ namespace Donation.Services
                 imageIndex++;
             }
 
-            object payload = new
-            {
-                model,
-                messages = new[] { new { role = "user", content } },
-                response_format = new { type = "json_object" },
-                reasoning = new { enabled = false },
-                temperature = 0,
-                max_tokens = 1000,
-                stream = false
-            };
-
             Exception? lastError = null;
-            for (int attempt = 0; attempt <= 2; attempt++)
+            foreach (string model in models.Distinct(StringComparer.OrdinalIgnoreCase))
             {
+                object payload = new
+                {
+                    model,
+                    messages = new[] { new { role = "user", content } },
+                    temperature = 0,
+                    max_tokens = 1000,
+                    stream = false
+                };
+
                 try
                 {
                     string responseText = await SendOpenRouterRequestAsync(
@@ -260,18 +260,27 @@ namespace Donation.Services
                     return ParseOpenRouterResult(responseText);
                 }
                 catch (Exception error) when (
-                    error is JsonException || error is InvalidOperationException)
+                    error is JsonException ||
+                    error is InvalidOperationException ||
+                    error is HttpRequestException)
                 {
                     lastError = error;
-                    if (attempt < 2)
-                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                    else
-                        throw;
+                    _logger.LogWarning(
+                        error,
+                        "影像模型 {Model} 沒有完成辨識。",
+                        model);
                 }
             }
 
-            throw new InvalidOperationException(
-                "OpenRouter 回傳內容無法使用。", lastError);
+            _logger.LogWarning(lastError, "影像辨識沒有完成，改由機構直接看照片。");
+            return new AiImageResult(
+                false,
+                "無法判斷",
+                "這張照片沒有辨識完成，機構會直接看照片確認。",
+                false,
+                false,
+                true,
+                true);
         }
 
         private async Task<string> SendOpenRouterRequestAsync(
@@ -304,7 +313,10 @@ namespace Donation.Services
                 {
                     _logger.LogError(
                         "OpenRouter 呼叫失敗。StatusCode: {StatusCode}", response.StatusCode);
-                    throw new HttpRequestException("OpenRouter 呼叫失敗。");
+                    throw new HttpRequestException(
+                        "OpenRouter 呼叫失敗。",
+                        null,
+                        response.StatusCode);
                 }
 
                 return responseText;
@@ -327,14 +339,11 @@ namespace Donation.Services
                 message.ValueKind != JsonValueKind.Object)
                 throw new InvalidOperationException("OpenRouter 回傳的 message 格式不正確。");
 
-            if (!message.TryGetProperty("content", out JsonElement content))
-                throw new InvalidOperationException("OpenRouter 回傳內容為空。");
-
-            string modelText = ExtractTextFromContent(content).Trim();
+            string modelText = ReadModelText(message);
             if (string.IsNullOrWhiteSpace(modelText))
                 throw new InvalidOperationException("OpenRouter 模型回傳空內容。");
 
-            modelText = CleanJsonText(modelText);
+            modelText = ExtractJsonObject(modelText);
             using JsonDocument resultDocument = JsonDocument.Parse(modelText);
             JsonElement result = resultDocument.RootElement;
 
@@ -358,6 +367,36 @@ namespace Donation.Services
             return new AiImageResult(
                 itemMatches, condition, reason.Trim(), visibleDamage,
                 expired, needMoreImages, true);
+        }
+
+        private static string ReadModelText(JsonElement message)
+        {
+            if (message.TryGetProperty("content", out JsonElement content))
+            {
+                string text = ExtractTextFromContent(content).Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                    return text;
+            }
+
+            foreach (string name in new[] { "reasoning", "reasoning_content" })
+            {
+                if (message.TryGetProperty(name, out JsonElement reasoning) &&
+                    reasoning.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(reasoning.GetString()))
+                    return reasoning.GetString()!.Trim();
+            }
+
+            return string.Empty;
+        }
+
+        private static string ExtractJsonObject(string text)
+        {
+            string value = CleanJsonText(text);
+            int start = value.IndexOf('{');
+            int end = value.LastIndexOf('}');
+            if (start >= 0 && end > start)
+                return value.Substring(start, end - start + 1);
+            return value;
         }
 
         private static string ExtractTextFromContent(JsonElement content)
