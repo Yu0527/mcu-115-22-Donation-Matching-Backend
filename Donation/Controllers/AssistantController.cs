@@ -34,7 +34,11 @@ namespace Donation.Controllers
 
             try
             {
-                var answer = await _openRouterService.SendMessageAsync(request.Message.Trim(), role, history);
+                var answer = await _openRouterService.SendMessageAsync(
+                    request.Message.Trim(),
+                    role,
+                    history,
+                    request.System);
 
                 Console.WriteLine($"OpenRouter 回覆內容：{answer}");
 
@@ -60,6 +64,8 @@ namespace Donation.Controllers
         {
             public string Message { get; set; }
             public string Role { get; set; }
+            /// <summary>前端可帶平台事實；空白時後端使用內建提示詞。</summary>
+            public string System { get; set; }
             public List<ChatHistoryItem> History { get; set; } = new();
         }
 
